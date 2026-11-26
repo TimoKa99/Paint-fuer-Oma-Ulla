@@ -275,7 +275,7 @@ html[data-skin=xp] #ws::-webkit-scrollbar-corner{background:var(--face)}
 var $=function(s){return document.querySelector(s)};
 var cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d',{willReadFrequently:true}),octx=ov.getContext('2d');
 var sheet=$('#sheet'),ws=$('#ws'),layersEl=$('#layers'),tbox=$('#textbox'),tarea=$('#textarea');
-var S={thumb:false,alpha:1,pressure:false,smooth:true,zoom:1/Math.min(2,Math.max(1,window.devicePixelRatio||1)),fg:'#000000',bg:'#ffffff',target:'fg',tool:'pencil',prev:'pencil',grid:false,dirty:false,name:'Unbenannt',fill:0,transparent:false,font:'Arial',fsize:12,bold:false,italic:false,under:false,showTools:true,showPal:true,showStatus:true};
+var S={used:false,thumb:false,alpha:1,pressure:false,smooth:true,zoom:1/Math.min(2,Math.max(1,window.devicePixelRatio||1)),fg:'#000000',bg:'#ffffff',target:'fg',tool:'pencil',prev:'pencil',grid:false,dirty:false,name:'Unbenannt',fill:0,transparent:false,font:'Arial',fsize:12,bold:false,italic:false,under:false,showTools:true,showPal:true,showStatus:true};
 function curSkin(){return document.documentElement.getAttribute('data-skin')||'xp'}
 function setSkin(k,save){document.documentElement.setAttribute('data-skin',k);if(save){try{localStorage.setItem('omas-skin',k)}catch(e){}}}
 (function(){var k='xp';try{k=localStorage.getItem('omas-skin')||'xp'}catch(e){}setSkin(k==='98'?'98':'xp')})();
@@ -309,7 +309,7 @@ function autosave(){
     }).catch(function(){});
   }catch(e){}
 }
-function touch(){S.dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(autosave,1500)}
+function touch(){S.dirty=true;S.used=true;clearTimeout(saveTimer);saveTimer=setTimeout(autosave,1500)}
 
 /* Rückgängig: speichert nur die geänderten Bildteile, darum sehr viele Schritte möglich */
 function addHist(e){
@@ -1235,7 +1235,7 @@ function resizeCanvas(w,h){
 function newDoc(){
   commitText();cancelShapes();commitSel();clearLayers();
   setSize(Math.max(300,Math.floor((ws.clientWidth-34)*DPR)),Math.max(240,Math.floor((ws.clientHeight-34)*DPR)));S.zoom=Z1;layout();fillWith('#ffffff');
-  resetHist();S.name='Unbenannt';setTitle();S.dirty=false;autosave();
+  resetHist();S.name='Unbenannt';setTitle();S.dirty=false;S.used=false;autosave();
   setStatus('Neues Bild.');
 }
 function applyOp(fn){
@@ -1321,7 +1321,7 @@ function openCanvas(c,name){
   commitText();cancelShapes();commitSel();clearLayers();
   S.zoom=Z1;setSize(c.width,c.height);ctx.drawImage(c,0,0);
   var z=fitZoom();if(z<Z1){S.zoom=z;layout()}
-  resetHist();S.name=((name||'Bild').replace(/\.[^.]+$/,'')||'Bild').slice(0,60);setTitle();S.dirty=false;autosave();
+  S.used=true;resetHist();S.name=((name||'Bild').replace(/\.[^.]+$/,'')||'Bild').slice(0,60);setTitle();S.dirty=false;autosave();
   setStatus('Bild geöffnet. Jetzt kannst du darauf malen.');
 }
 $('#filein').addEventListener('change',function(){
@@ -1357,6 +1357,14 @@ function saveAsDlg(){
   modal('Speichern unter','<label>Dateiname: <input id="fname" type="text" value="'+S.name.replace(/"/g,'')+'"></label><label>Dateityp: <select id="ftype"><option value="png">PNG (Bild)</option><option value="jpg">JPEG (Foto)</option></select></label>',
   [['Speichern',function(){var n=($('#fname').value||'Bild').replace(/[\\\/:*?"<>|]/g,'').trim()||'Bild',f=$('#ftype').value;closeModal();S.name=n;setTitle();doSave(n,f)}],['Abbrechen']]);
 }
+function openFlow(){
+  commitText();commitSel();
+  if(!S.used&&!layers.length){openPicker('open');return}
+  modal('Bild öffnen','Es ist schon ein Bild da. Soll das neue Bild dazugelegt werden? Dann bleibt alles andere erhalten und du kannst jedes Bild einzeln bewegen.',[
+    ['Dazu legen',function(){closeModal();openPicker('paste')}],
+    ['Alles ersetzen',function(){closeModal();confirmSave(function(){openPicker('open')},true)}],
+    ['Abbrechen']]);
+}
 function confirmSave(next,needsGesture){
   if(!S.dirty){next();return}
   modal('Paint','Änderungen in „'+S.name+'“ speichern?',[
@@ -1364,15 +1372,15 @@ function confirmSave(next,needsGesture){
     ['Nein',function(){closeModal();next()}],['Abbrechen']]);
 }
 function helpDlg(){
-  info('Hilfethemen','<p><b>Malen:</b> Werkzeug links antippen, dann mit dem Apple Pencil malen. Unter den Werkzeugen stehen Dicke und Form. Mit + und − wird es noch feiner.</p><p><b>Farben:</b> unten antippen. Lange drücken = Hintergrundfarbe. Zweimal tippen = Farbe ändern. Das Radiergummi radiert mit der Hintergrundfarbe.</p><p><b>Fehler:</b> oben rechts „Rückgängig“. Es lassen sich sehr viele Schritte zurücknehmen.</p><p><b>Zoom:</b> unten rechts am Regler. Auf die Zahl tippen = zurück auf 100 %.</p><p><b>Bild öffnen:</b> Datei → Öffnen.</p><p><b>Mehrere Bilder einfügen:</b> Bearbeiten → Einfügen von … und Fotos auswählen. Jedes Foto ist ein eigenes Bild über dem Hintergrund.</p><p><b>Bild bewegen, Größe ändern, drehen:</b> Werkzeug „Bilder bewegen“ (Pfeil) wählen und ein Bild antippen. Ziehen = verschieben. An den blauen Punkten ziehen = Größe. Am runden Punkt oben ziehen = drehen. Leere Fläche antippen = Hintergrund.</p><p><b>Nur ein Bild radieren:</b> Bild antippen, dann Radiergummi wählen. Es wirkt nur auf das gewählte Bild („Bearbeitet wird: …“ in der Leiste). Auf „Hintergrund“ tippen, um wieder auf dem Hintergrund zu malen.</p><p><b>Ausschnitt verschieben:</b> Auswahl-Werkzeug, Rechteck aufziehen, dann ziehen.</p><p><b>Zeichenfläche größer machen:</b> an den blauen Punkten rechts und unten ziehen.</p><p><b>Mit dem Stift gemalt?</b> Dann schiebt der Finger das Bild, damit die Hand aufliegen darf. Mit zwei Fingern verschiebt man immer.</p><p><b>Speichern:</b> Datei → Speichern. Das Bild bleibt außerdem automatisch auf diesem iPad erhalten.</p>');
+  info('Hilfethemen','<p><b>Malen:</b> Werkzeug links antippen, dann mit dem Apple Pencil malen. Unter den Werkzeugen stehen Dicke und Form. Mit + und − wird es noch feiner.</p><p><b>Farben:</b> unten antippen. Lange drücken = Hintergrundfarbe. Zweimal tippen = Farbe ändern. Das Radiergummi radiert mit der Hintergrundfarbe.</p><p><b>Fehler:</b> oben rechts „Rückgängig“. Es lassen sich sehr viele Schritte zurücknehmen.</p><p><b>Zoom:</b> unten rechts am Regler. Auf die Zahl tippen = zurück auf 100 %.</p><p><b>Bild öffnen:</b> Datei → Öffnen.</p><p><b>Mehrere Bilder einfügen:</b> Datei → Bild hinzufügen … und Fotos auswählen. Jedes Foto ist ein eigenes Bild über dem Hintergrund.</p><p><b>Bild bewegen, Größe ändern, drehen:</b> Werkzeug „Bilder bewegen“ (Pfeil) wählen und ein Bild antippen. Ziehen = verschieben. An den blauen Punkten ziehen = Größe. Am runden Punkt oben ziehen = drehen. Leere Fläche antippen = Hintergrund.</p><p><b>Nur ein Bild radieren:</b> Bild antippen, dann Radiergummi wählen. Es wirkt nur auf das gewählte Bild („Bearbeitet wird: …“ in der Leiste). Auf „Hintergrund“ tippen, um wieder auf dem Hintergrund zu malen.</p><p><b>Ausschnitt verschieben:</b> Auswahl-Werkzeug, Rechteck aufziehen, dann ziehen.</p><p><b>Zeichenfläche größer machen:</b> an den blauen Punkten rechts und unten ziehen.</p><p><b>Mit dem Stift gemalt?</b> Dann schiebt der Finger das Bild, damit die Hand aufliegen darf. Mit zwei Fingern verschiebt man immer.</p><p><b>Speichern:</b> Datei → Speichern. Das Bild bleibt außerdem automatisch auf diesem iPad erhalten.</p>');
 }
 
 /* Menüs */
 function ck(b,t){return (b?'✓ ':'')+t}
 function applyView(){$('#tools').hidden=!S.showTools;$('#bottom').hidden=!S.showPal;$('#status').hidden=!S.showStatus}
 var menus={
-  datei:function(){return [['Neu',function(){confirmSave(newDoc,false)}],['Öffnen …',function(){confirmSave(function(){openPicker('open')},true)}],['-'],['Speichern',function(){doSave(S.name,'png')}],['Speichern unter …',saveAsDlg],['Zum Sichern in Fotos zeigen …',function(){commitText();commitSel();toBlobP(compose()).then(function(b){if(b)showPhoto(b)})}]]},
-  bearbeiten:function(){var has=!!sel;return [['Rückgängig',undo,!hist.length],['Wiederholen',redo,!redoH.length],['-'],['Ausschneiden',cutSel,!has],['Kopieren',copySel,!has],['Einfügen',pasteClip,!clip],['Auswahl löschen',delSel,!has],['Alles markieren',selAll],['-'],['Kopieren nach …',function(){var c=selToCanvas();if(c)saveCanvas(c,'Auswahl','png')},!has],['Einfügen von …',function(){openPicker('paste')}]]},
+  datei:function(){return [['Neu',function(){confirmSave(newDoc,false)}],['Bild hinzufügen …',function(){openPicker('paste')}],['Öffnen …',openFlow],['-'],['Speichern',function(){doSave(S.name,'png')}],['Speichern unter …',saveAsDlg],['Zum Sichern in Fotos zeigen …',function(){commitText();commitSel();toBlobP(compose()).then(function(b){if(b)showPhoto(b)})}]]},
+  bearbeiten:function(){var has=!!sel;return [['Rückgängig',undo,!hist.length],['Wiederholen',redo,!redoH.length],['-'],['Ausschneiden',cutSel,!has],['Kopieren',copySel,!has],['Einfügen',pasteClip,!clip],['Auswahl löschen',delSel,!has],['Alles markieren',selAll],['-'],['Kopieren nach …',function(){var c=selToCanvas();if(c)saveCanvas(c,'Auswahl','png')},!has],['Weitere Bilder einfügen …',function(){openPicker('paste')}]]},
   ansicht:function(){return [[ck(S.showTools,'Werkzeugkasten'),function(){S.showTools=!S.showTools;applyView()}],[ck(S.showPal,'Farbfeld und Zoom'),function(){S.showPal=!S.showPal;applyView()}],[ck(S.showStatus,'Statusleiste'),function(){S.showStatus=!S.showStatus;applyView()}],['-'],[ck(S.zoom===Z1,'Zoom: Normale Größe'),function(){setZoom(Z1)}],[ck(S.zoom===4*Z1,'Zoom: Große Größe (400 %)'),function(){setZoom(4*Z1)}],['Zoom: Benutzerdefiniert …',zoomDlg],[ck(S.thumb,'Zoom: Miniatur anzeigen'),function(){S.thumb=!S.thumb;thumbRefresh()}],['Ganzes Bild zeigen',function(){setZoom(fitZoom())}],['-'],[ck(S.grid,'Raster anzeigen'),function(){S.grid=!S.grid;layout()}],['-'],[ck(curSkin()==='xp','Aussehen: Windows XP'),function(){setSkin('xp',true);layout()}],[ck(curSkin()==='98','Aussehen: Windows 98'),function(){setSkin('98',true);layout()}],['-'],[ck(S.smooth,'Weiche Linien (ohne Treppen)'),function(){S.smooth=!S.smooth;setStatus(S.smooth?'Weiche Linien: an':'Weiche Linien: aus (Pixel-Look wie früher)')}]]},
   bild:function(){return [['Spiegeln und Drehen …',flipRotDlg],['Strecken und Neigen …',stretchDlg],['Farben umkehren',function(){applyOp(invertC)}],['Attribute …',attrDlg],['-'],['Alle Bilder zusammenfügen',flattenAll,!layers.length],[active?'Gewähltes Bild entfernen':'Hintergrund leeren',clearImg]]},
   farben:function(){return [['Farben bearbeiten …',function(){editColorDlg(null)}]]},
@@ -1499,11 +1507,11 @@ idbGet('doc').then(function(rec){
     return Promise.all((rec.layers||[]).map(function(l){return loadBlob(l.blob).then(function(lc){return {lc:lc,l:l}})}));
   }).then(function(arr){
     arr.forEach(function(o){layerSeq++;var lc=o.lc;lc.className='lay';var L={name:o.l.name||('Bild '+layerSeq),c:lc,cx:o.l.cx,cy:o.l.cy,w:o.l.w,h:o.l.h,a:o.l.a,el:null};insertLayer(L,layers.length)});
-    var z=fitZoom();if(z<Z1){S.zoom=z}layout();renderStrip();S.dirty=false;
+    var z=fitZoom();if(z<Z1){S.zoom=z}layout();renderStrip();S.dirty=false;S.used=true;
   });
   return idbGet('img').then(function(r2){
     if(!r2||!r2.blob)return;
-    return loadBlob(r2.blob).then(function(c){S.zoom=Z1;setSize(c.width,c.height);ctx.drawImage(c,0,0);var z=fitZoom();if(z<Z1){S.zoom=z;layout()}if(r2.name){S.name=r2.name;setTitle()}S.dirty=false});
+    return loadBlob(r2.blob).then(function(c){S.zoom=Z1;setSize(c.width,c.height);ctx.drawImage(c,0,0);var z=fitZoom();if(z<Z1){S.zoom=z;layout()}if(r2.name){S.name=r2.name;setTitle()}S.dirty=false;S.used=true});
   });
 }).catch(function(){});
 })();
